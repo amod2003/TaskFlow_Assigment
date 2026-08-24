@@ -1,0 +1,94 @@
+### TaskFlow API - Manual Testing Requests (REST Client)
+@baseUrl = http://localhost:8000
+@email = alice@example.com
+@password = StrongPassword123!
+
+### 1. Health Check
+GET {{baseUrl}}/health
+Accept: application/json
+
+### 2. Prometheus Metrics
+GET {{baseUrl}}/metrics
+
+### 3. User Registration (Signup)
+# @name signup
+POST {{baseUrl}}/api/v1/auth/signup
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "full_name": "Alice Wonderland"
+}
+
+### 4. User Login
+# @name login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Store Auth Token from response
+@authToken = {{login.response.body.access_token}}
+
+### 5. Get Current User Profile
+GET {{baseUrl}}/api/v1/auth/me
+Authorization: Bearer {{authToken}}
+
+### 6. Create Project
+# @name createProject
+POST {{baseUrl}}/api/v1/projects
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "E-Commerce Core API",
+  "description": "Payment gateway and checkout workflow engine"
+}
+
+### Store Project ID
+@projectId = {{createProject.response.body.id}}
+
+### 7. List User Projects
+GET {{baseUrl}}/api/v1/projects?page=1&page_size=10
+Authorization: Bearer {{authToken}}
+
+### 8. Create Task in Project
+# @name createTask
+POST {{baseUrl}}/api/v1/projects/{{projectId}}/tasks
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "title": "Implement Stripe Webhook Handlers",
+  "description": "Handle payment succeeded and refund webhook events",
+  "status": "todo",
+  "due_date": "2026-08-31T18:00:00Z"
+}
+
+### Store Task ID
+@taskId = {{createTask.response.body.id}}
+
+### 9. Filter & Search Tasks (Cache-Backed)
+GET {{baseUrl}}/api/v1/tasks?status=todo&page=1&page_size=20
+Authorization: Bearer {{authToken}}
+
+### 10. Update Task Status (Triggers Instant Cache Invalidation)
+PATCH {{baseUrl}}/api/v1/tasks/{{taskId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "status": "in_progress"
+}
+
+### 11. List Notifications
+GET {{baseUrl}}/api/v1/notifications
+Authorization: Bearer {{authToken}}
+
+### 12. Delete Task
+DELETE {{baseUrl}}/api/v1/tasks/{{taskId}}
+Authorization: Bearer {{authToken}}

@@ -54,3 +54,4 @@ else
     docker compose logs app worker beat
     exit 1
 fi
+
