@@ -1,0 +1,80 @@
+# Render Blueprint Infrastructure Configuration
+services:
+  # Web API Service
+  - type: web
+    name: taskflow-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: taskflow-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: taskflow-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: taskflow-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: taskflow-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+
+  # Celery Background Worker
+  - type: worker
+    name: taskflow-worker
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A app.workers.celery_app.celery_app worker --loglevel=info
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: taskflow-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: taskflow-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: taskflow-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: taskflow-redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: taskflow-api
+          envVarKey: SECRET_KEY
+
+databases:
+  - name: taskflow-postgres
+    databaseName: taskflow_db
+    user: taskflow
+    plan: free
+
+  - name: taskflow-redis
+    plan: free
