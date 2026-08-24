@@ -1,0 +1,137 @@
+version: "3.8"
+
+services:
+  # ============================================================================
+  # 1. PostgreSQL Database
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskflow_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-taskflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taskflow_password}
+      POSTGRES_DB: ${POSTGRES_DB:-taskflow_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-taskflow} -d ${POSTGRES_DB:-taskflow_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # 2. Redis Cache & Celery Message Broker
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: taskflow_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================================
+  # 3. FastAPI Web Application Server
+  # ============================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taskflow_api
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=False
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-taskflow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-taskflow_password}
+      - POSTGRES_DB=${POSTGRES_DB:-taskflow_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-taskflow}:${POSTGRES_PASSWORD:-taskflow_password}@postgres:5432/${POSTGRES_DB:-taskflow_db}
+      - SYNC_DATABASE_URL=postgresql://${POSTGRES_USER:-taskflow}:${POSTGRES_PASSWORD:-taskflow_password}@postgres:5432/${POSTGRES_DB:-taskflow_db}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-super-secret-production-key-min-32-chars}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+      - CACHE_TTL_SECONDS=300
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ============================================================================
+  # 4. Celery Background Worker (Task Reassignments & Async Notifications)
+  # ============================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taskflow_worker
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app.celery_app worker --loglevel=info -c 2
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-taskflow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-taskflow_password}
+      - POSTGRES_DB=${POSTGRES_DB:-taskflow_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-taskflow}:${POSTGRES_PASSWORD:-taskflow_password}@postgres:5432/${POSTGRES_DB:-taskflow_db}
+      - SYNC_DATABASE_URL=postgresql://${POSTGRES_USER:-taskflow}:${POSTGRES_PASSWORD:-taskflow_password}@postgres:5432/${POSTGRES_DB:-taskflow_db}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-super-secret-production-key-min-32-chars}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ============================================================================
+  # 5. Celery Beat Scheduler (Periodic Overdue Task Scans)
+  # ============================================================================
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taskflow_beat
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-taskflow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-taskflow_password}
+      - POSTGRES_DB=${POSTGRES_DB:-taskflow_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-taskflow}:${POSTGRES_PASSWORD:-taskflow_password}@postgres:5432/${POSTGRES_DB:-taskflow_db}
+      - SYNC_DATABASE_URL=postgresql://${POSTGRES_USER:-taskflow}:${POSTGRES_PASSWORD:-taskflow_password}@postgres:5432/${POSTGRES_DB:-taskflow_db}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-super-secret-production-key-min-32-chars}
+      - CELERY_BEAT_SCHEDULE_SECONDS=60
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
