@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+import fakeredis.aioredis as fakeredis
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.api.deps import get_db
 from app.core.database import Base
+from app.core.redis import get_redis
 from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.models.user import User
@@ -54,13 +56,27 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """Provides an AsyncClient connected to the FastAPI app with test db override."""
+async def fake_redis() -> AsyncGenerator[fakeredis.FakeRedis, None]:
+    """Yields an in-memory isolated FakeRedis instance."""
+    redis_instance = fakeredis.FakeRedis(decode_responses=True)
+    yield redis_instance
+    await redis_instance.aclose()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client(
+    db_session: AsyncSession, fake_redis: fakeredis.FakeRedis
+) -> AsyncGenerator[AsyncClient, None]:
+    """Provides an AsyncClient connected to the FastAPI app with test db and redis overrides."""
 
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
+    async def override_get_redis() -> AsyncGenerator[fakeredis.FakeRedis, None]:
+        yield fake_redis
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_redis] = override_get_redis
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         yield ac
