@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_active_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.logging import logger
 from app.core.redis import get_redis
 from app.models.task import TaskStatus
 from app.models.user import User
@@ -15,6 +16,7 @@ from app.schemas.common import PaginatedResponse
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from app.services.cache_service import CacheService
 from app.services.task_service import TaskService
+from app.workers.tasks import notify_task_reassigned
 
 router = APIRouter(tags=["Tasks"])
 
@@ -32,7 +34,10 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ) -> TaskResponse:
-    """Create a task within a project and invalidate task cache."""
+    """
+    Create a task within a project.
+    Invalidates user cache and enqueues async notification if an assignee is provided.
+    """
     task = await TaskService.create_task(
         db=db,
         project_id=project_id,
@@ -44,6 +49,19 @@ async def create_task(
     await CacheService.invalidate_user_tasks_cache(redis, current_user.id)
     if task.assignee_id and task.assignee_id != current_user.id:
         await CacheService.invalidate_user_tasks_cache(redis, task.assignee_id)
+
+    # Dispatch background notification if assignee was assigned
+    if task.assignee_id:
+        try:
+            notify_task_reassigned.delay(
+                task_id=task.id,
+                new_assignee_id=task.assignee_id,
+                task_title=task.title,
+                project_id=task.project_id,
+                old_assignee_id=None,
+            )
+        except Exception as e:
+            logger.warning(f"Could not enqueue background notification task: {e}")
 
     return TaskResponse.model_validate(task)
 
@@ -81,7 +99,6 @@ async def list_tasks(
     Retrieve filtered and paginated tasks.
     Uses Redis cache-aside strategy with automatic cache invalidation on task changes.
     """
-    # Build filter dictionary for deterministic cache key generation
     filter_params = {
         "project_id": project_id,
         "status": task_status.value if task_status else None,
@@ -164,7 +181,7 @@ async def update_task(
 ) -> TaskResponse:
     """
     Update task attributes, status, or assignee.
-    Immediately flushes user cache to guarantee zero stale reads on status changes.
+    Immediately flushes user cache and enqueues async notification if task is reassigned.
     """
     task, old_assignee, new_assignee, status_changed = await TaskService.update_task(
         db=db,
@@ -176,11 +193,23 @@ async def update_task(
     # Invalidate owner cache
     await CacheService.invalidate_user_tasks_cache(redis, current_user.id)
 
-    # If assignee was modified, invalidate affected user caches
+    # If assignee was modified, invalidate affected user caches and dispatch background notification
     if old_assignee and old_assignee != current_user.id:
         await CacheService.invalidate_user_tasks_cache(redis, old_assignee)
     if new_assignee and new_assignee != current_user.id:
         await CacheService.invalidate_user_tasks_cache(redis, new_assignee)
+
+    if new_assignee:
+        try:
+            notify_task_reassigned.delay(
+                task_id=task.id,
+                new_assignee_id=new_assignee,
+                task_title=task.title,
+                project_id=task.project_id,
+                old_assignee_id=old_assignee,
+            )
+        except Exception as e:
+            logger.warning(f"Could not enqueue background notification task: {e}")
 
     return TaskResponse.model_validate(task)
 
