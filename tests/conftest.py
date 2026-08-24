@@ -12,6 +12,13 @@ from app.core.redis import get_redis
 from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.models.user import User
+from app.workers.celery_app import celery_app
+
+# Configure Celery for test execution without external broker
+celery_app.conf.update(
+    task_always_eager=True,
+    task_eager_propagates=True,
+)
 
 # In-memory async SQLite engine for ultra-fast, isolated testing
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
