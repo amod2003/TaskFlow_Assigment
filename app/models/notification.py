@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
-class NotificationType(str, enum.Enum):
+class NotificationType(enum.StrEnum):
     TASK_OVERDUE = "task_overdue"
     TASK_REASSIGNED = "task_reassigned"
     TASK_STATUS_CHANGED = "task_status_changed"

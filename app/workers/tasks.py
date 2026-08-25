@@ -105,9 +105,7 @@ def notify_task_status_changed(
                 task_id=task_id,
                 type=NotificationType.TASK_STATUS_CHANGED,
                 title=f"Task Status Updated: {task_title}",
-                message=(
-                    f"Task '{task_title}' status changed from " f"{old_status} to {new_status}."
-                ),
+                message=(f"Task '{task_title}' status changed from {old_status} to {new_status}."),
                 is_read=False,
             )
             session.add(notification)

@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from app.core.logging import logger
 
 
-class NotificationType(str, Enum):
+class NotificationType(StrEnum):
     TASK_OVERDUE = "task_overdue"
     TASK_REASSIGNED = "task_reassigned"
     TASK_STATUS_CHANGED = "task_status_changed"
