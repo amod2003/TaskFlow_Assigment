@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserResponse, UserUpdate
 
 
 class AuthService:
@@ -70,3 +70,16 @@ class AuthService:
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             user=UserResponse.model_validate(user),
         )
+
+    @staticmethod
+    async def update_user_profile(db: AsyncSession, user: User, user_in: UserUpdate) -> User:
+        """Update user profile fields and optionally change password."""
+        if user_in.full_name is not None:
+            user.full_name = user_in.full_name
+
+        if user_in.password is not None:
+            user.hashed_password = hash_password(user_in.password)
+
+        await db.flush()
+        await db.refresh(user)
+        return user

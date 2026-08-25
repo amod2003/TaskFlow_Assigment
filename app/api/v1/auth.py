@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_active_user, get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -51,3 +51,19 @@ async def get_me(
 ) -> UserResponse:
     """Retrieve profile data for the currently authenticated user."""
     return UserResponse.model_validate(current_user)
+
+
+@router.patch(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update current user profile",
+)
+async def update_me(
+    user_in: UserUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    """Update the current user's profile (full_name and/or password)."""
+    updated_user = await AuthService.update_user_profile(db, current_user, user_in)
+    return UserResponse.model_validate(updated_user)

@@ -127,3 +127,38 @@ async def test_get_current_user_unauthorized(client: AsyncClient) -> None:
         "/api/v1/auth/me", headers={"Authorization": "Bearer invalid_token_xyz"}
     )
     assert resp2.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_update_own_profile_success(
+    client: AsyncClient, test_user: User, auth_headers: dict[str, str]
+) -> None:
+    """Test updating current user's full_name."""
+    response = await client.patch(
+        "/api/v1/auth/me",
+        json={"full_name": "Updated Name"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["full_name"] == "Updated Name"
+    assert data["email"] == test_user.email
+
+
+@pytest.mark.asyncio
+async def test_update_own_password(
+    client: AsyncClient, test_user: User, auth_headers: dict[str, str]
+) -> None:
+    """Test updating current user's password."""
+    response = await client.patch(
+        "/api/v1/auth/me",
+        json={"password": "NewSecurePassword123!"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"email": test_user.email, "password": "NewSecurePassword123!"},
+    )
+    assert login_resp.status_code == 200

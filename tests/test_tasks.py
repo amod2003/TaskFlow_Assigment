@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 
@@ -223,3 +224,170 @@ async def test_delete_task(
     # Verify task is gone
     get_resp = await client.get(f"/api/v1/tasks/{task_id}", headers=auth_headers)
     assert get_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_task_unassigned_success(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test creating a task without an assignee."""
+    proj_resp = await client.post(
+        "/api/v1/projects",
+        json={"name": "Unassigned Task Project"},
+        headers=auth_headers,
+    )
+    project_id = proj_resp.json()["id"]
+
+    task_payload = {
+        "title": "Unassigned Task",
+        "description": "No assignee yet.",
+        "status": "todo",
+    }
+    response = await client.post(
+        f"/api/v1/projects/{project_id}/tasks",
+        json=task_payload,
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Unassigned Task"
+    assert data["assignee_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_filter_tasks_by_assignee_id(
+    client: AsyncClient,
+    test_user: User,
+    test_user_2: User,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test filtering tasks by assignee_id."""
+    proj_resp = await client.post(
+        "/api/v1/projects",
+        json={"name": "Assignee Filter Project"},
+        headers=auth_headers,
+    )
+    project_id = proj_resp.json()["id"]
+
+    await client.post(
+        f"/api/v1/projects/{project_id}/tasks",
+        json={"title": "Alice Task", "assignee_id": test_user.id},
+        headers=auth_headers,
+    )
+    await client.post(
+        f"/api/v1/projects/{project_id}/tasks",
+        json={"title": "Bob Task", "assignee_id": test_user_2.id},
+        headers=auth_headers,
+    )
+    await client.post(
+        f"/api/v1/projects/{project_id}/tasks",
+        json={"title": "Unassigned Task"},
+        headers=auth_headers,
+    )
+
+    resp_alice = await client.get(
+        "/api/v1/tasks",
+        params={"assignee_id": test_user.id},
+        headers=auth_headers,
+    )
+    assert resp_alice.status_code == 200
+    data = resp_alice.json()
+    assert data["total"] == 1
+    assert data["items"][0]["title"] == "Alice Task"
+
+    resp_bob = await client.get(
+        "/api/v1/tasks",
+        params={"assignee_id": test_user_2.id},
+        headers=auth_headers,
+    )
+    assert resp_bob.status_code == 200
+    data = resp_bob.json()
+    assert data["total"] == 1
+    assert data["items"][0]["title"] == "Bob Task"
+
+
+@pytest.mark.asyncio
+async def test_assign_inactive_user_fails(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test that assigning a task to an inactive user returns 400."""
+    proj_resp = await client.post(
+        "/api/v1/projects",
+        json={"name": "Inactive Assignee Project"},
+        headers=auth_headers,
+    )
+    project_id = proj_resp.json()["id"]
+
+    inactive_user = User(
+        email="inactive@example.com",
+        hashed_password="test",
+        full_name="Inactive User",
+        is_active=False,
+    )
+    db_session.add(inactive_user)
+    await db_session.flush()
+    await db_session.refresh(inactive_user)
+
+    task_payload = {
+        "title": "Task for Inactive User",
+        "assignee_id": inactive_user.id,
+    }
+    response = await client.post(
+        f"/api/v1/projects/{project_id}/tasks",
+        json=task_payload,
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "not active" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_unassign_task_invalidates_old_assignee_cache(
+    client: AsyncClient,
+    test_user: User,
+    test_user_2: User,
+    auth_headers: dict[str, str],
+    auth_headers_2: dict[str, str],
+    fake_redis,
+) -> None:
+    """Test that unassigning a task invalidates the old assignee's cache."""
+    proj_resp = await client.post(
+        "/api/v1/projects",
+        json={"name": "Cache Invalidation Project"},
+        headers=auth_headers,
+    )
+    project_id = proj_resp.json()["id"]
+
+    task_resp = await client.post(
+        f"/api/v1/projects/{project_id}/tasks",
+        json={"title": "Cache Test Task", "assignee_id": test_user_2.id},
+        headers=auth_headers,
+    )
+    task_id = task_resp.json()["id"]
+
+    await client.get("/api/v1/tasks", headers=auth_headers_2)
+    cache_key_pattern = f"taskflow:cache:user:{test_user_2.id}:tasks:*"
+    import fnmatch
+
+    keys = []
+    for key in await fake_redis.keys("*"):
+        decoded = key.decode() if isinstance(key, bytes) else key
+        if fnmatch.fnmatch(decoded, cache_key_pattern):
+            keys.append(decoded)
+    assert len(keys) > 0, "Expected cache keys to exist for old assignee"
+
+    await client.patch(
+        f"/api/v1/tasks/{task_id}",
+        json={"assignee_id": None},
+        headers=auth_headers,
+    )
+
+    keys_after = []
+    for key in await fake_redis.keys("*"):
+        decoded = key.decode() if isinstance(key, bytes) else key
+        if fnmatch.fnmatch(decoded, cache_key_pattern):
+            keys_after.append(decoded)
+    assert len(keys_after) == 0, "Expected old assignee cache keys to be invalidated"

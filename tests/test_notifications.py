@@ -192,3 +192,34 @@ async def test_notifications_api_endpoints(
     read_all_resp = await client.post("/api/v1/notifications/read-all", headers=auth_headers)
     assert read_all_resp.status_code == 200
     assert "Marked 1 notifications as read" in read_all_resp.json()["message"]
+
+
+@pytest.mark.asyncio
+async def test_task_status_change_triggers_notification(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test that updating a task status triggers the status change notification worker."""
+    proj_resp = await client.post(
+        "/api/v1/projects",
+        json={"name": "Status Change Project"},
+        headers=auth_headers,
+    )
+    project_id = proj_resp.json()["id"]
+
+    task_resp = await client.post(
+        f"/api/v1/projects/{project_id}/tasks",
+        json={"title": "Status Change Task", "status": "todo"},
+        headers=auth_headers,
+    )
+    task_id = task_resp.json()["id"]
+
+    with patch("app.api.v1.tasks.notify_task_status_changed.delay") as mock_delay:
+        await client.patch(
+            f"/api/v1/tasks/{task_id}",
+            json={"status": "in_progress"},
+            headers=auth_headers,
+        )
+        assert mock_delay.called
+        assert mock_delay.call_args.kwargs["old_status"] == "todo"
+        assert mock_delay.call_args.kwargs["new_status"] == "in_progress"

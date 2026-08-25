@@ -13,10 +13,7 @@ fi
 # Execute database migrations if container is starting web app
 if [ "$1" = "uvicorn" ] || [ "$1" = "web" ]; then
   echo "Running database schema migrations with Alembic..."
-  alembic upgrade head || {
-    echo "Alembic upgrade head encountered an issue. Initializing database tables..."
-    python -c "import asyncio; from app.core.database import Base, async_engine; asyncio.run(async_engine.begin().then(lambda c: c.run_sync(Base.metadata.create_all)))" 2>/dev/null || true
-  }
+  alembic upgrade head
   echo "Database schema up-to-date."
 fi
 

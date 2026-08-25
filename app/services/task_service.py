@@ -25,14 +25,20 @@ class TaskService:
         # Ensure project exists and belongs to requesting user
         await ProjectService.get_project_by_id(db, project_id, user_id)
 
-        # If assignee_id provided, verify assignee exists
+        # If assignee_id provided, verify assignee exists and is active
         if task_in.assignee_id is not None:
             assignee_stmt = select(User).where(User.id == task_in.assignee_id)
             assignee_res = await db.execute(assignee_stmt)
-            if not assignee_res.scalars().first():
+            assignee = assignee_res.scalars().first()
+            if not assignee:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Assignee user with id {task_in.assignee_id} does not exist.",
+                )
+            if not assignee.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Assignee user with id {task_in.assignee_id} is not active.",
                 )
 
         task = Task(
@@ -137,10 +143,10 @@ class TaskService:
         task_id: int,
         task_in: TaskUpdate,
         user_id: int,
-    ) -> tuple[Task, int | None, int | None, bool]:
+    ) -> tuple[Task, int | None, int | None, bool, TaskStatus | None]:
         """
         Update task attributes.
-        Returns (task, old_assignee_id, new_assignee_id, status_changed).
+        Returns (task, old_assignee_id, new_assignee_id, status_changed, old_status).
         """
         task = await cls.get_task_by_id(db, task_id, user_id)
 
@@ -151,10 +157,16 @@ class TaskService:
         if "assignee_id" in update_data and update_data["assignee_id"] is not None:
             assignee_stmt = select(User).where(User.id == update_data["assignee_id"])
             assignee_res = await db.execute(assignee_stmt)
-            if not assignee_res.scalars().first():
+            assignee = assignee_res.scalars().first()
+            if not assignee:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Assignee user with id {update_data['assignee_id']} does not exist.",
+                )
+            if not assignee.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Assignee user with id {update_data['assignee_id']} is not active.",
                 )
 
         for field, value in update_data.items():
@@ -165,13 +177,14 @@ class TaskService:
 
         new_assignee_id = task.assignee_id
         status_changed = old_status != task.status
-        reassigned = old_assignee_id != new_assignee_id and new_assignee_id is not None
+        reassigned = old_assignee_id != new_assignee_id
 
         return (
             task,
             old_assignee_id if reassigned else None,
             new_assignee_id if reassigned else None,
             status_changed,
+            old_status,
         )
 
     @classmethod

@@ -16,7 +16,7 @@ from app.schemas.common import PaginatedResponse
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from app.services.cache_service import CacheService
 from app.services.task_service import TaskService
-from app.workers.tasks import notify_task_reassigned
+from app.workers.tasks import notify_task_reassigned, notify_task_status_changed
 
 router = APIRouter(tags=["Tasks"])
 
@@ -50,8 +50,8 @@ async def create_task(
     if task.assignee_id and task.assignee_id != current_user.id:
         await CacheService.invalidate_user_tasks_cache(redis, task.assignee_id)
 
-    # Dispatch background notification if assignee was assigned
-    if task.assignee_id:
+    # Dispatch background notification if assignee was assigned to someone else
+    if task.assignee_id and task.assignee_id != current_user.id:
         try:
             notify_task_reassigned.delay(
                 task_id=task.id,
@@ -183,7 +183,7 @@ async def update_task(
     Update task attributes, status, or assignee.
     Immediately flushes user cache and enqueues async notification if task is reassigned.
     """
-    task, old_assignee, new_assignee, status_changed = await TaskService.update_task(
+    task, old_assignee, new_assignee, status_changed, old_status = await TaskService.update_task(
         db=db,
         task_id=task_id,
         task_in=task_in,
@@ -199,7 +199,7 @@ async def update_task(
     if new_assignee and new_assignee != current_user.id:
         await CacheService.invalidate_user_tasks_cache(redis, new_assignee)
 
-    if new_assignee:
+    if new_assignee and new_assignee != current_user.id:
         try:
             notify_task_reassigned.delay(
                 task_id=task.id,
@@ -210,6 +210,21 @@ async def update_task(
             )
         except Exception as e:
             logger.warning(f"Could not enqueue background notification task: {e}")
+
+    if status_changed:
+        recipient_id = task.assignee_id or current_user.id
+        try:
+            notify_task_status_changed.delay(
+                task_id=task.id,
+                task_title=task.title,
+                old_status=old_status.value if old_status else "",
+                new_status=task.status.value
+                if isinstance(task.status, TaskStatus)
+                else str(task.status),
+                recipient_id=recipient_id,
+            )
+        except Exception as e:
+            logger.warning(f"Could not enqueue status change notification task: {e}")
 
     return TaskResponse.model_validate(task)
 

@@ -4,12 +4,18 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.core.database import SyncSessionLocal
-from app.models.notification import Notification, NotificationType
+from app.models.notification import Notification
 from app.models.project import Project
 from app.models.task import Task, TaskStatus
+from app.services.notification_delivery import (
+    NotificationMessage,
+    NotificationType,
+    SimulatedNotificationDelivery,
+)
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger("taskflow.worker")
+delivery = SimulatedNotificationDelivery()
 
 
 @celery_app.task(name="app.workers.tasks.notify_task_reassigned", bind=True, max_retries=3)
@@ -32,7 +38,6 @@ def notify_task_reassigned(
 
     with SyncSessionLocal() as session:
         try:
-            # Create notification record for the new assignee
             notification = Notification(
                 user_id=new_assignee_id,
                 task_id=task_id,
@@ -49,10 +54,18 @@ def notify_task_reassigned(
             session.commit()
             session.refresh(notification)
 
-            # Simulated notification delivery (e.g. Email / Push / SMS)
-            logger.info(
-                f"[SIMULATED NOTIFICATION - REASSIGNMENT] "
-                f"Delivered notification to User #{new_assignee_id} for Task '{task_title}' (Task ID: {task_id})"
+            delivery.send(
+                NotificationMessage(
+                    user_id=new_assignee_id,
+                    task_id=task_id,
+                    type=NotificationType.TASK_REASSIGNED,
+                    title=f"Task Assigned: {task_title}",
+                    message=(
+                        f"You have been assigned to task '{task_title}'."
+                        if not old_assignee_id
+                        else f"Task '{task_title}' was reassigned to you."
+                    ),
+                )
             )
 
             return {
@@ -64,6 +77,64 @@ def notify_task_reassigned(
         except Exception as exc:
             session.rollback()
             logger.error(f"[Celery Worker] Error notifying task reassignment: {exc}", exc_info=True)
+            raise self.retry(exc=exc, countdown=5) from exc
+
+
+@celery_app.task(name="app.workers.tasks.notify_task_status_changed", bind=True, max_retries=3)
+def notify_task_status_changed(
+    self,
+    task_id: int,
+    task_title: str,
+    old_status: str,
+    new_status: str,
+    recipient_id: int,
+) -> dict:
+    """
+    Background job triggered when a task status changes.
+    Creates a persistent notification record and simulates external delivery (logs).
+    """
+    logger.info(
+        f"[Celery Worker] Processing task status change: task_id={task_id}, "
+        f"{old_status} -> {new_status}, recipient={recipient_id}"
+    )
+
+    with SyncSessionLocal() as session:
+        try:
+            notification = Notification(
+                user_id=recipient_id,
+                task_id=task_id,
+                type=NotificationType.TASK_STATUS_CHANGED,
+                title=f"Task Status Updated: {task_title}",
+                message=(
+                    f"Task '{task_title}' status changed from " f"{old_status} to {new_status}."
+                ),
+                is_read=False,
+            )
+            session.add(notification)
+            session.commit()
+            session.refresh(notification)
+
+            delivery.send(
+                NotificationMessage(
+                    user_id=recipient_id,
+                    task_id=task_id,
+                    type=NotificationType.TASK_STATUS_CHANGED,
+                    title=f"Task Status Updated: {task_title}",
+                    message=f"Task '{task_title}' status changed from {old_status} to {new_status}.",
+                )
+            )
+
+            return {
+                "status": "success",
+                "notification_id": notification.id,
+                "user_id": recipient_id,
+                "task_id": task_id,
+            }
+        except Exception as exc:
+            session.rollback()
+            logger.error(
+                f"[Celery Worker] Error notifying task status change: {exc}", exc_info=True
+            )
             raise self.retry(exc=exc, countdown=5) from exc
 
 
@@ -122,10 +193,17 @@ def check_overdue_tasks() -> dict:
                     session.add(notification)
                     notifications_created += 1
 
-                    # Simulated alert delivery
-                    logger.warning(
-                        f"[SIMULATED NOTIFICATION - OVERDUE ALERT] "
-                        f"Task #{task.id} '{task.title}' is overdue! Notified recipient User #{recipient_id}."
+                    delivery.send(
+                        NotificationMessage(
+                            user_id=recipient_id,
+                            task_id=task.id,
+                            type=NotificationType.TASK_OVERDUE,
+                            title=f"Task Overdue: {task.title}",
+                            message=(
+                                f"The task '{task.title}' was due on "
+                                f"{task.due_date.strftime('%Y-%m-%d %H:%M UTC')} and is currently not marked done."
+                            ),
+                        )
                     )
 
             session.commit()

@@ -19,6 +19,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application startup and shutdown events."""
     setup_logging()
     logger.info(f"Starting {settings.PROJECT_NAME} in [{settings.ENVIRONMENT}] mode...")
+
+    # Automatically initialize tables if not already present
+    try:
+        import app.models  # noqa: F401
+        from app.core.database import Base, async_engine
+
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        logger.warning(f"Could not initialize database tables on startup: {e}")
+
     yield
     logger.info(f"Shutting down {settings.PROJECT_NAME}...")
     await close_redis()

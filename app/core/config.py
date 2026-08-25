@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 
 from pydantic import field_validator
@@ -25,7 +26,15 @@ class Settings(BaseSettings):
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: str | list[str]) -> list[str]:
-        if isinstance(v, str) and not v.startswith("["):
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
             return [i.strip() for i in v.split(",")]
         elif isinstance(v, list):
             return v

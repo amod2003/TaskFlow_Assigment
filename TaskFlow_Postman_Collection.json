@@ -1,0 +1,564 @@
+{
+  "info": {
+    "name": "TaskFlow API",
+    "description": "",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "GET /health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/health",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "Performs deep health check probing PostgreSQL database and Redis connectivity.\nReturns 200 OK if all dependencies are responsive, or 503 Service Unavailable if degraded."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/metrics",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "metrics"
+          ]
+        },
+        "description": "Returns Prometheus exposition format metrics for Prometheus scraper."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /api/v1/auth/signup",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/auth/signup",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "signup"
+          ]
+        },
+        "description": "Create a new user account with email and password.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"full_name\": {},\n  \"password\": \"string\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST /api/v1/auth/login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/auth/login",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Authenticate with email and password to receive a Bearer JWT access token.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"string\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET /api/v1/auth/me",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/auth/me",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "me"
+          ]
+        },
+        "description": "Retrieve profile data for the currently authenticated user."
+      },
+      "response": []
+    },
+    {
+      "name": "PATCH /api/v1/auth/me",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/auth/me",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "me"
+          ]
+        },
+        "description": "Update the current user's profile (full_name and/or password).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"full_name\": {},\n  \"password\": {}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST /api/v1/projects",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/projects",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "projects"
+          ]
+        },
+        "description": "Create a new project owned by the authenticated user.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"string\",\n  \"description\": {}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET /api/v1/projects",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/projects",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "projects"
+          ]
+        },
+        "description": "Retrieve all projects owned by the authenticated user with pagination."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /api/v1/projects/{project_id}",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/projects/{project_id}",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "projects",
+            "{project_id}"
+          ]
+        },
+        "description": "Retrieve project details. Access is restricted to the project owner."
+      },
+      "response": []
+    },
+    {
+      "name": "PATCH /api/v1/projects/{project_id}",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/projects/{project_id}",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "projects",
+            "{project_id}"
+          ]
+        },
+        "description": "Update project details. Access is restricted to the project owner.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": {},\n  \"description\": {}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE /api/v1/projects/{project_id}",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/projects/{project_id}",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "projects",
+            "{project_id}"
+          ]
+        },
+        "description": "Delete a project and its associated tasks. Access is restricted to the project owner."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /api/v1/projects/{project_id}/tasks",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/projects/{project_id}/tasks",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "projects",
+            "{project_id}",
+            "tasks"
+          ]
+        },
+        "description": "Create a task within a project.\nInvalidates user cache and enqueues async notification if an assignee is provided.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"string\",\n  \"description\": {},\n  \"status\": {},\n  \"due_date\": {},\n  \"assignee_id\": {}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET /api/v1/tasks",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/tasks",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tasks"
+          ]
+        },
+        "description": "Retrieve filtered and paginated tasks.\nUses Redis cache-aside strategy with automatic cache invalidation on task changes."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /api/v1/tasks/{task_id}",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/tasks/{task_id}",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tasks",
+            "{task_id}"
+          ]
+        },
+        "description": "Retrieve details for a single task."
+      },
+      "response": []
+    },
+    {
+      "name": "PATCH /api/v1/tasks/{task_id}",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/tasks/{task_id}",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tasks",
+            "{task_id}"
+          ]
+        },
+        "description": "Update task attributes, status, or assignee.\nImmediately flushes user cache and enqueues async notification if task is reassigned.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": {},\n  \"description\": {},\n  \"status\": {},\n  \"due_date\": {},\n  \"assignee_id\": {}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE /api/v1/tasks/{task_id}",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/tasks/{task_id}",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tasks",
+            "{task_id}"
+          ]
+        },
+        "description": "Delete a task and invalidate cache."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /api/v1/notifications",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/notifications",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "notifications"
+          ]
+        },
+        "description": "Retrieve simulated notifications received by the current user."
+      },
+      "response": []
+    },
+    {
+      "name": "PATCH /api/v1/notifications/{notification_id}/read",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/notifications/{notification_id}/read",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "notifications",
+            "{notification_id}",
+            "read"
+          ]
+        },
+        "description": "Mark a specific notification as read."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /api/v1/notifications/read-all",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/notifications/read-all",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "notifications",
+            "read-all"
+          ]
+        },
+        "description": "Mark all unread notifications as read for current user."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /api/v1/health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/health",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "health"
+          ]
+        },
+        "description": "Performs deep health check probing PostgreSQL database and Redis connectivity.\nReturns 200 OK if all dependencies are responsive, or 503 Service Unavailable if degraded."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /api/v1/metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/v1/metrics",
+          "host": [
+            "localhost:8000"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "metrics"
+          ]
+        },
+        "description": "Returns Prometheus exposition format metrics for Prometheus scraper."
+      },
+      "response": []
+    }
+  ]
+}
