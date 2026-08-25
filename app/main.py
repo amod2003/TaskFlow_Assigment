@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Automatically initialize tables if not already present
     try:
-        import app.models  # noqa: F401
+        import app.models as _models  # noqa: F401
         from app.core.database import Base, async_engine
 
         async with async_engine.begin() as conn:

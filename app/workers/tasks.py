@@ -178,7 +178,7 @@ def check_overdue_tasks() -> dict:
                     )
                 ).first()
 
-                if not existing_notif:
+                if not existing_notif and task.due_date is not None:
                     notification = Notification(
                         user_id=recipient_id,
                         task_id=task.id,
